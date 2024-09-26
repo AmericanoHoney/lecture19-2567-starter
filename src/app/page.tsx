@@ -29,16 +29,35 @@ export default function Home() {
   const [myCourses, setMyCourses] = useState<Course[]|null>(null);
 
   const loadCourses = async () => {
-    const resp = await axios.get("");
+    setLoadingCourses(true);
+    const resp = await axios.get("/api/courses"); //อยู่โปรเจคเดียวกัน ถ้าไม่อยู่ต้องใช้ http://...
+    //console.log(resp.data.courses);
+    setCourses(resp.data.courses);
+    setLoadingCourses(false);
   };
 
   const loadMyCourses = async () => {
-    const resp = await axios.get("/api/enrollments");
+    const resp = await axios.get("/api/enrollments",{
+      headers: {
+        Authorization: `Bearer ${token}`, // ส่ง token ใน header
+      },
+    });
+    //console.log(resp.data.courses);
+    setMyCourses(resp.data.courses);
   };
 
   // load courses when app starts the first time
   useEffect(() => {
     loadCourses();
+    //read token and authenusername from local storage
+    const token = localStorage.getItem("token");
+    const authenUsername = localStorage.getItem("authenUsername");
+    if (token && authenUsername) {
+      setToken(token);
+      setAuthenUsername(authenUsername);
+      //loadMyCourses();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // load my courses when the "token" is changed (logged in successfully)
@@ -47,16 +66,32 @@ export default function Home() {
     if (!token) return;
 
     loadMyCourses();
-  }, [token]);
+  }, [token]); //ถ้าtokenเปลียนแปลง
 
   const login = async () => {
     try {
-      const resp = await axios.post("/api/user/login");
+      const resp = await axios.post("/api/user/login",
+          {
+            username: username, //เขียนยาว
+            password //เขียนย่อได้เพราะตัวแปรชื่อเดียวกัน
+          }
+        );
+      //console.log(resp.data);
 
       // set token and authenUsername here
-      // clear login form
+      setToken(resp.data.token);
+      setAuthenUsername(resp.data.username);
 
-    } catch (error) {
+      // load my courses after logged in successfully
+      // clear login form
+      setUsername("");
+      setPassword("");
+      //setMyCourses(null);
+      
+      //save token and authenUsername to local storage
+      localStorage.setItem("token", resp.data.token);
+      localStorage.setItem("authenUsername", resp.data.username);
+    } catch (error:any) {
       if (error.response.data)
         // show error message from API response
         alert(error.response.data.message);
@@ -68,6 +103,13 @@ export default function Home() {
 
   const logout = () => {
     // set necessary state variables after logged out
+    setAuthenUsername("");
+    setToken("");
+    setMyCourses(null);
+
+    //remove token and authenUsername from local storage
+    localStorage.removeItem("token");
+    localStorage.removeItem("authenUsername");
   };
 
   return (
@@ -79,7 +121,7 @@ export default function Home() {
         {/* all courses section */}
         <Paper withBorder p="md">
           <Title order={4}>All courses</Title>
-          {/* <Loader variant="dots" /> */}
+          {loadingCourses && <Loader type="dots" />}
           {courses &&
             courses.map((course:Course) => (
               <Text key={course.courseNo}>
@@ -93,7 +135,8 @@ export default function Home() {
           <Title order={4}>Login</Title>
           
           {/* show login form if not logged in */}
-          <Group align="flex-end">
+          {!authenUsername && (
+            <Group align="flex-end">
             <TextInput
               label="Username"
               onChange={(e) => setUsername(e.target.value)}
@@ -105,24 +148,27 @@ export default function Home() {
               value={password}
             />
             <Button onClick={login}>Login</Button>
-          </Group>
+          </Group>)}
+          
 
           {/* show log out option if logged in successfully */}
-          {/* <Group>
+          {authenUsername && (
+            <Group>
             <Text fw="bold">Hi {authenUsername}!</Text>
             <Button color="red" onClick={logout}>
               Logout
             </Button>
-          </Group> */}
+          </Group>)}
+          
           
         </Paper>
 
         {/* enrollment section */}
         <Paper withBorder p="md">
           <Title order={4}>My courses</Title>
-          <Text c="dimmed">Please login to see your course(s)</Text>
-
-          {myCourses &&
+          {!authenUsername && <Text c="dimmed">Please login to see your course(s)</Text>}
+            
+          {authenUsername && myCourses &&
             myCourses.map((course) => (
               <Text key={course.courseNo}>
                 {course.courseNo} - {course.title}
